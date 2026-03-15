@@ -1,4 +1,4 @@
-pipeline {
+/** pipeline {
     agent any
 
     stages {
@@ -7,6 +7,7 @@ pipeline {
                 docker {
                     image 'node:18-alpine'
                     reuseNode true
+                    args '-u root:root'
                 }
             }
             steps {
@@ -23,6 +24,60 @@ pipeline {
                 ls -la
                 '''
             }
+        }
+    }
+}
+**/
+
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Cleanup') {
+            steps {
+                // Wipe the workspace to prevent 'npm ci' from hitting permission/lock issues
+                cleanWs()
+            }
+        }
+
+        stage('Build') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    // Running as root inside the container ensures npm can 
+                    // write to the workspace mounted from the Jenkins host
+                    args '-u root' 
+                }
+            }
+            steps {
+                sh '''
+                echo "Current Node version:"
+                node --version
+                
+                echo "Installing dependencies..."
+                npm ci
+                
+                echo "Running build..."
+                npm run build
+                '''
+                
+                echo 'Task Completed'
+                
+                sh '''
+                echo "Listing build output:"
+                ls -la
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline finished successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check the npm logs above.'
         }
     }
 }
